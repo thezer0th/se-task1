@@ -1,5 +1,4 @@
 #include <iostream>
-#include <sstream>
 #include <string>
 #include <unordered_map>
 #include <map>
@@ -11,25 +10,11 @@
 #include <unordered_set>
 using namespace std;
 
+using ticket_office_exn = invalid_argument;
+
 using clock_nat_t = uint8_t; 
-enum { _hour = 0, _minute = 1 };
+// enum { _hour = 0, _minute = 1 };
 using stop_time_t = tuple<clock_nat_t, clock_nat_t>;
-
-stop_time_t stop_time_from_string(const string& str) {    
-    static const auto stop_time_re = regex("([0-9]+):([0-9]+)");    
-    smatch m; 
-
-    regex_match(str, m, stop_time_re);
-
-    stop_time_t stop_time;
-    auto& [hour, minute] = stop_time;
-
-    stringstream ss {};
-    ss << m[1]; ss >> hour;
-    ss << m[2]; ss >> minute;
-
-    return stop_time;
-}
 
 int compare_stop_time(const stop_time_t& lhs, const stop_time_t& rhs) {
     const auto& [lhs_hour, lhs_minute] = lhs;
@@ -64,14 +49,36 @@ bool operator!=(const stop_time_t& lhs, const stop_time_t& rhs) {
     return compare_stop_time(lhs, rhs) != 0;
 }
 
-bool is_stop_time_valid(const stop_time_t& stop_time) {
+stop_time_t stop_time_from_string(const string& str) {    
+    static const auto stop_time_re = regex("([0-9]+):([0-9]+)");    
+    smatch m; 
+
+    if (!regex_match(str, m, stop_time_re)) {
+        throw ticket_office_exn("provided str not a valid stop time str");
+    }
+
+    stop_time_t stop_time;
+    auto& [hour, minute] = stop_time;
+
+    stringstream ss {};
+    ss << m[1]; ss >> hour;
+    ss << m[2]; ss >> minute;
+
+    if (!(0 <= hour && hour <= 23 && 0 <= minute && minute <= 59)) {
+        throw ticket_office_exn("number fields in str are invalid");
+    }
+
     static const auto start = stop_time_t(5, 55), end = stop_time_t(21, 21);
-    return start <= stop_time && stop_time <= end;
+    if (!(start <= stop_time && stop_time <= end)) {
+        throw ticket_office_exn("provided stop time is outside of operation range");
+    }
+
+    return stop_time;
 }
 
 using stop_id_t = string;
 using seq_index_t = size_t;
-enum { _seq_index = 0, _stop_time = 1 };
+// enum { _seq_index = 0, _stop_time = 1 };
 using tramline_t = unordered_map<stop_id_t, tuple<seq_index_t, stop_time_t>>;
 
 using tramline_id_t = int;
@@ -80,7 +87,7 @@ using tramlines_t = unordered_map<tramline_id_t, tramline_t>;
 using ticket_price_t = uint64_t; // natively in 1/100ths to avoid rounding errors
 using ticket_id_t = string;
 using ticket_dur_t = uint64_t;
-enum { _ticket_dur = 0, _ticket_price = 1 };
+// enum { _ticket_dur = 0, _ticket_price = 1 };
 using price_map_t = map<ticket_price_t, tuple<ticket_dur_t, ticket_id_t>>;
 using tickets_t = tuple<unordered_set<ticket_id_t>, price_map_t>;
 
@@ -93,52 +100,44 @@ ticket_dur_t stop_time_diff(const stop_time_t& time1, const stop_time_t& time2) 
 }
 
 using counter_t = uint32_t;
-enum { _tramlines = 0, _tickets = 1, _counter = 2 };
+// enum { _tramlines = 0, _tickets = 1, _counter = 2 };
 using state_t = tuple<tramlines_t, tickets_t, counter_t>;
 
-using line_index_t = size_t;
-enum { _line_index = 0, _content = 1 };
-
-using line_t = tuple<line_index_t, string>;
-void raise_error(const line_t& line) {
-    const auto& [line_index, content] = line;
-    cerr << line_index << ' ' << content << '\n';
-}
-
-void process_tramline_addition(const line_t& line, tramlines_t& tramlines) {
-    const auto& [_1, content] = line;
+void process_tramline_addition(const string& line, tramlines_t& tramlines) {
     stringstream ss {};
-    ss << content;
+    ss << line;
 
     tramline_id_t id; ss >> id;
     if (tramlines.find(id) != tramlines.end()) {
-        raise_error(line);
+        throw ticket_office_exn("tramline with specified id already exists");
     }
     else {
         tramline_t tram_line;
         auto prior_time = optional<stop_time_t>();
 
         for (size_t idx = 0; ss.rdbuf()->in_avail() > 0; ++idx) {
-            string time_str; ss >> time_str;
+            string time_str;
+            ss >> time_str;
             stop_time_t stop_time = stop_time_from_string(time_str);
-            stop_id_t stop_id; ss >> stop_id;
+            stop_id_t stop_id;
+            ss >> stop_id;
 
-            if (!is_stop_time_valid(stop_time) ||
-                (prior_time.has_value() && prior_time.value() <= stop_time) ||
-                tram_line.find(stop_id) != tram_line.end()) {
-                raise_error(line);
-                return;
+            if (prior_time.has_value() && prior_time.value() <= stop_time) {
+                throw ticket_office_exn("stops not in causal order");
+            }
+            if (tram_line.find(stop_id) != tram_line.end()) {
+                throw ticket_office_exn("some stop repeated");
             }
 
             prior_time.value() = stop_time;
-            tram_line[stop_id] = { idx, stop_time };
+            tram_line[stop_id] = {idx, stop_time};
         }
 
         tramlines[id] = tram_line;
     }
 }
 
-void process_ticket_addition(const smatch& m, const line_t& line, tickets_t& tickets) {
+void process_ticket_addition(const smatch& m, tickets_t& tickets) {
     ticket_id_t id = m[1].str();
 
     string price_str = m[2].str();
@@ -154,7 +153,7 @@ void process_ticket_addition(const smatch& m, const line_t& line, tickets_t& tic
     auto& [ids, price_map] = tickets;
 
     if (ids.find(id) != ids.end()) {
-        raise_error(line);
+        throw ticket_office_exn("ticket with specified id already exists");
     }
     else {
         if (price_map.find(price) != price_map.end()) {
@@ -168,12 +167,12 @@ void process_ticket_addition(const smatch& m, const line_t& line, tickets_t& tic
     }
 }
 
-enum { _chosen_prices = 0, _total_price = 1, _total_dur = 2 };
+// enum { _chosen_prices = 0, _total_price = 1, _total_dur = 2 };
 using branch_state_t = tuple<vector<ticket_price_t>, ticket_price_t, ticket_dur_t>;
 
 bool operator<(const branch_state_t& lhs, const branch_state_t& rhs) {
-    const auto& [_1, lhs_price, _2] = lhs;
-    const auto& [_3, rhs_price, _4] = rhs;
+    const auto& [_1, lhs_price/*, _2*/] = lhs;
+    const auto& [_3, rhs_price/*, _4*/] = rhs;
     return lhs_price < rhs_price;
 }
 
@@ -194,7 +193,7 @@ void find_ticket_set(const ticket_dur_t& dur, const price_map_t& price_map, coun
             auto cost_bound = !chosen_prices.empty() ? chosen_prices.back() 
                                                      : numeric_limits<ticket_price_t>::max();
             if (optimal.has_value()) {
-                const auto& [_1, opt_price, _2] = optimal.value();
+                const auto& [_1, opt_price/*, _2*/] = optimal.value();
                 cost_bound = min(cost_bound, opt_price - total_price);
             }
 
@@ -212,7 +211,7 @@ void find_ticket_set(const ticket_dur_t& dur, const price_map_t& price_map, coun
     branch_off({ vector<ticket_price_t>(), 0, 0 });
 
     if (optimal.has_value()) {
-        const auto& [opt_prices, _1, _2] = optimal.value();
+        const auto& [opt_prices/*, _1, _2*/] = optimal.value();
         cout << '!';
         for (size_t i = 0; i < opt_prices.size(); ++i) {
             cout << opt_prices[i];
@@ -229,13 +228,12 @@ void find_ticket_set(const ticket_dur_t& dur, const price_map_t& price_map, coun
     }
 }
 
-void process_ticket_query(const line_t& line, state_t& state) {
+void process_ticket_query(const string& line, state_t& state) {
     auto& [tramlines, tickets, counter] = state;
     auto& [_1, price_map] = tickets;
-    const auto& [_2, content] = line;
 
     stringstream ss {};
-    ss << content;
+    ss << line;
     { string _; ss >> _; };
 
     vector<stop_id_t> stops_seq;
@@ -297,29 +295,28 @@ void process_ticket_query(const line_t& line, state_t& state) {
     }
 }
 
-void process_line(const line_t& line, state_t& state) {
+void process_line(const string& line, state_t& state) {
     static const auto line_addition_re = 
-        regex("[0-9]+(?:\\ +[0-9]+:[0-9]+\\ +[a-zA-Z_\\^]+)");
+        regex(R"([0-9]+(?:\ +[0-9]+:[0-9]+\ +[a-zA-Z_\^]+)+)");
     static const auto ticket_addition_re =
-        regex("([a-zA-Z\\ ]+?)\\ +([0-9]*\\.[0-9][0-9])\\ +([1-9][0-9]*)");
+        regex(R"(([a-zA-Z\ ]+?)\ +([0-9]*\.[0-9][0-9])\ +([1-9][0-9]*))");
     static const auto ticket_query_re =
-        regex("\\?\\ [a-zA-Z_\\^]+(?:\\ +[0-9]+\\ +[a-zA-Z_\\^]+)+");
+        regex(R"(\?\ [a-zA-Z_\^]+(?:\ +[0-9]+\ +[a-zA-Z_\^]+)+)");
 
-    const auto& [_1, content] = line;
     auto& [tramlines, tickets, _2] = state;
 
     smatch m;
-    if (regex_match(content, m, line_addition_re)) {
+    if (regex_match(line, m, line_addition_re)) {
         process_tramline_addition(line, tramlines);
     }
-    else if (regex_match(content, m, ticket_addition_re)) {
-        process_ticket_addition(m, line, tickets);
+    else if (regex_match(line, m, ticket_addition_re)) {
+        process_ticket_addition(m, tickets);
     }
-    else if (regex_match(content, m, ticket_query_re)) {
+    else if (regex_match(line, m, ticket_query_re)) {
         process_ticket_query(line, state);
     }
-    else if (!content.empty()) {
-        raise_error(line);
+    else if (!line.empty()) {
+        throw ticket_office_exn("request given in unknown format");
     }
 }
 
@@ -328,7 +325,12 @@ int main() {
     state_t state;
     
     for (line_index_t idx = 1; getline(cin, line); ++idx) {
-        process_line({idx, line}, state);
+        try {
+            process_line(line, state);
+        }
+        catch (const ticket_office_exn& _) {
+            cerr << idx << ' ' << line << '\n';
+        }
     }
 
     return EXIT_SUCCESS;

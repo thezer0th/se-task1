@@ -8,5 +8,4 @@ function(simple name)
 endfunction()
 
 simple(kasa)
-simple(regex)
 simple(sand)
