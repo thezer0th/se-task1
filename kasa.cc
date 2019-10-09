@@ -50,7 +50,7 @@ bool operator!=(const stop_time_t& lhs, const stop_time_t& rhs) {
 }
 
 stop_time_t stop_time_from_string(const string& str) {    
-    static const auto stop_time_re = regex("([0-9]+):([0-9]+)");    
+    static const auto stop_time_re = regex("([0-9]+):([0-9][0-9])");
     smatch m; 
 
     if (!regex_match(str, m, stop_time_re)) {
@@ -64,7 +64,7 @@ stop_time_t stop_time_from_string(const string& str) {
     ss << m[1]; ss >> hour;
     ss << m[2]; ss >> minute;
 
-    if (!(0 <= hour && hour <= 23 && 0 <= minute && minute <= 59)) {
+    if (!(hour <= 23 && minute <= 59)) {
         throw ticket_office_exn("number fields in str are invalid");
     }
 
@@ -171,8 +171,8 @@ void process_ticket_addition(const smatch& m, tickets_t& tickets) {
 using branch_state_t = tuple<vector<ticket_price_t>, ticket_price_t, ticket_dur_t>;
 
 bool operator<(const branch_state_t& lhs, const branch_state_t& rhs) {
-    const auto& [_1, lhs_price/*, _2*/] = lhs;
-    const auto& [_3, rhs_price/*, _4*/] = rhs;
+    const auto& [_1, lhs_price, _2] = lhs;
+    const auto& [_3, rhs_price, _4] = rhs;
     return lhs_price < rhs_price;
 }
 
@@ -193,8 +193,8 @@ void find_ticket_set(const ticket_dur_t& dur, const price_map_t& price_map, coun
             auto cost_bound = !chosen_prices.empty() ? chosen_prices.back() 
                                                      : numeric_limits<ticket_price_t>::max();
             if (optimal.has_value()) {
-                const auto& [_1, opt_price/*, _2*/] = optimal.value();
-                cost_bound = min(cost_bound, opt_price - total_price);
+                const auto& [_1, opt_total, _2] = optimal.value();
+                cost_bound = min(cost_bound, opt_total > total_price ? opt_total - total_price: 0);
             }
 
             for (auto it = price_map.begin(); it != price_map.upper_bound(cost_bound); ++it) {
@@ -211,7 +211,7 @@ void find_ticket_set(const ticket_dur_t& dur, const price_map_t& price_map, coun
     branch_off({ vector<ticket_price_t>(), 0, 0 });
 
     if (optimal.has_value()) {
-        const auto& [opt_prices/*, _1, _2*/] = optimal.value();
+        const auto& [opt_prices, _1, _2] = optimal.value();
         cout << '!';
         for (size_t i = 0; i < opt_prices.size(); ++i) {
             cout << opt_prices[i];
@@ -234,7 +234,7 @@ void process_ticket_query(const string& line, state_t& state) {
 
     stringstream ss {};
     ss << line;
-    { string _; ss >> _; };
+    { string question_mark; ss >> question_mark; }
 
     vector<stop_id_t> stops_seq;
     vector<tramline_id_t> lines_seq;
@@ -296,14 +296,15 @@ void process_ticket_query(const string& line, state_t& state) {
 }
 
 void process_line(const string& line, state_t& state) {
+    // Note that the amnt of spaces is >=1 here
     static const auto line_addition_re = 
-        regex(R"([0-9]+(?:\ +[0-9]+:[0-9]+\ +[a-zA-Z_\^]+)+)");
+        regex(R"([0-9]+(?:\ +[0-9]+:[0-9][0-9]\ +[a-zA-Z_\^]+)+)");
     static const auto ticket_addition_re =
         regex(R"(([a-zA-Z\ ]+?)\ +([0-9]*\.[0-9][0-9])\ +([1-9][0-9]*))");
     static const auto ticket_query_re =
         regex(R"(\?\ [a-zA-Z_\^]+(?:\ +[0-9]+\ +[a-zA-Z_\^]+)+)");
 
-    auto& [tramlines, tickets, _2] = state;
+    auto& [tramlines, tickets, _1] = state;
 
     smatch m;
     if (regex_match(line, m, line_addition_re)) {
@@ -324,7 +325,7 @@ int main() {
     string line;
     state_t state;
     
-    for (line_index_t idx = 1; getline(cin, line); ++idx) {
+    for (size_t idx = 1; getline(cin, line); ++idx) {
         try {
             process_line(line, state);
         }
