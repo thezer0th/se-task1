@@ -1,0 +1,13 @@
+reqs:
+    - use only STL (literally only STL);
+    - +1 for std::regex if lost 1 on code quality;
+    - use io streams;
+    - use specified names;
+    - no warnings;
+    - use STL algos;
+    - std memory;
+    - be wary of integer/natural types;
+    - other penalties? just write it well, I suppose;
+    - use const T& and T&&;
+    - no globals;
+    - using T' = T;
