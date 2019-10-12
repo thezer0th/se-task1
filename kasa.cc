@@ -8,12 +8,13 @@
 #include <functional>
 #include <limits>
 #include <unordered_set>
+#include <fstream>
+#include <cassert>
 using namespace std;
 
 using ticket_office_exn = invalid_argument;
 
-using clock_nat_t = uint8_t; 
-// enum { _hour = 0, _minute = 1 };
+using clock_nat_t = uint16_t;
 using stop_time_t = tuple<clock_nat_t, clock_nat_t>;
 
 int compare_stop_time(const stop_time_t& lhs, const stop_time_t& rhs) {
@@ -61,8 +62,10 @@ stop_time_t stop_time_from_string(const string& str) {
     auto& [hour, minute] = stop_time;
 
     stringstream ss {};
-    ss << m[1]; ss >> hour;
-    ss << m[2]; ss >> minute;
+    ss << m[1].str(); ss >> hour;
+
+    ss = {};
+    ss << m[2].str(); ss >> minute;
 
     if (!(hour <= 23 && minute <= 59)) {
         throw ticket_office_exn("number fields in str are invalid");
@@ -78,16 +81,14 @@ stop_time_t stop_time_from_string(const string& str) {
 
 using stop_id_t = string;
 using seq_index_t = size_t;
-// enum { _seq_index = 0, _stop_time = 1 };
 using tramline_t = unordered_map<stop_id_t, tuple<seq_index_t, stop_time_t>>;
 
 using tramline_id_t = int;
 using tramlines_t = unordered_map<tramline_id_t, tramline_t>;
 
-using ticket_price_t = uint64_t; // natively in 1/100ths to avoid rounding errors
+using ticket_price_t = uint64_t;
 using ticket_id_t = string;
 using ticket_dur_t = uint64_t;
-// enum { _ticket_dur = 0, _ticket_price = 1 };
 using price_map_t = map<ticket_price_t, tuple<ticket_dur_t, ticket_id_t>>;
 using tickets_t = tuple<unordered_set<ticket_id_t>, price_map_t>;
 
@@ -95,12 +96,11 @@ ticket_dur_t stop_time_diff(const stop_time_t& time1, const stop_time_t& time2) 
     const auto& [hour1, minute1] = time1;
     const auto& [hour2, minute2] = time2;
     
-    ticket_dur_t abs1 = 60 * hour1 + minute1, abs2 = 60 * hour2 + minute2; 
-    return abs1 > abs2 ? abs1 - abs2 : abs2 - abs1;    
+    ticket_dur_t abs1 = 60 * hour1 + minute1, abs2 = 60 * hour2 + minute2;
+    return abs1 > abs2 ? abs1 - abs2 : abs2 - abs1;
 }
 
 using counter_t = uint32_t;
-// enum { _tramlines = 0, _tickets = 1, _counter = 2 };
 using state_t = tuple<tramlines_t, tickets_t, counter_t>;
 
 void process_tramline_addition(const string& line, tramlines_t& tramlines) {
@@ -116,20 +116,18 @@ void process_tramline_addition(const string& line, tramlines_t& tramlines) {
         auto prior_time = optional<stop_time_t>();
 
         for (size_t idx = 0; ss.rdbuf()->in_avail() > 0; ++idx) {
-            string time_str;
-            ss >> time_str;
+            string time_str; ss >> time_str;
             stop_time_t stop_time = stop_time_from_string(time_str);
-            stop_id_t stop_id;
-            ss >> stop_id;
+            stop_id_t stop_id; ss >> stop_id;
 
-            if (prior_time.has_value() && prior_time.value() <= stop_time) {
+            if (prior_time.has_value() && prior_time.value() >= stop_time) {
                 throw ticket_office_exn("stops not in causal order");
             }
             if (tram_line.find(stop_id) != tram_line.end()) {
                 throw ticket_office_exn("some stop repeated");
             }
 
-            prior_time.value() = stop_time;
+            prior_time = make_optional(stop_time);
             tram_line[stop_id] = {idx, stop_time};
         }
 
@@ -145,29 +143,26 @@ void process_ticket_addition(const smatch& m, tickets_t& tickets) {
     ticket_price_t price;
     stringstream ss {};
     ss << price_str; ss >> price;
-    
+
     ticket_dur_t dur;
     ss = {};
     ss << m[3].str(); ss >> dur;
 
-    auto& [ids, price_map] = tickets;
+    auto&[ids, price_map] = tickets;
 
     if (ids.find(id) != ids.end()) {
         throw ticket_office_exn("ticket with specified id already exists");
-    }
-    else {
+    } else {
         if (price_map.find(price) != price_map.end()) {
-            auto& cur = price_map.at(price);
-            auto& [cur_dur, _1] = cur;
-            if (cur_dur < dur) cur = { dur, id };
-        }
-        else {
-            price_map[price] = { dur, id };
+            auto &cur = price_map.at(price);
+            auto&[cur_dur, _1] = cur;
+            if (cur_dur < dur) cur = {dur, id};
+        } else {
+            price_map[price] = {dur, id};
         }
     }
 }
 
-// enum { _chosen_prices = 0, _total_price = 1, _total_dur = 2 };
 using branch_state_t = tuple<vector<ticket_price_t>, ticket_price_t, ticket_dur_t>;
 
 bool operator<(const branch_state_t& lhs, const branch_state_t& rhs) {
@@ -186,7 +181,7 @@ void find_ticket_set(const ticket_dur_t& dur, const price_map_t& price_map, coun
         if (chosen_prices.size() >= 3 || total_dur >= dur) {
             if (total_dur >= dur) {
                 if (optimal.has_value()) optimal.value() = min(optimal.value(), branch);
-                else optimal.value() = branch;
+                else optimal = make_optional(branch);
             }         
         }        
         else {
@@ -212,9 +207,10 @@ void find_ticket_set(const ticket_dur_t& dur, const price_map_t& price_map, coun
 
     if (optimal.has_value()) {
         const auto& [opt_prices, _1, _2] = optimal.value();
-        cout << '!';
+        cout << "! ";
         for (size_t i = 0; i < opt_prices.size(); ++i) {
-            cout << opt_prices[i];
+            const auto& [_1, id] = price_map.at(opt_prices[i]);
+            cout << id;
             if (i != opt_prices.size()-1) {
                 cout << "; ";
             }
@@ -252,38 +248,37 @@ void process_ticket_query(const string& line, state_t& state) {
 
     auto last_arrival_time = optional<stop_time_t>(),
          first_departure_time = optional<stop_time_t>();
-    bool stops_without_the_line = false, 
-         arrival_after_departure = true;
+    auto improper_stop_seq = false;
     auto arrival_before_departure = optional<stop_id_t>();
 
     for (size_t i = 0; i < lines_seq.size(); ++i) {
         const auto &start_stop = stops_seq[i], &end_stop = stops_seq[i+1];
         const auto& tramline = tramlines[lines_seq[i]];
 
-        stops_without_the_line |= tramline.find(start_stop) == tramline.end() 
-                               || tramline.find(end_stop) == tramline.end();
+        improper_stop_seq |= tramline.find(start_stop) == tramline.end()
+                             || tramline.find(end_stop) == tramline.end();
         const auto& start = tramline.at(start_stop), end = tramline.at(end_stop);
         const auto& [start_seq_idx, start_time] = start;
         const auto& [end_seq_idx, end_time] = end;
 
-        stops_without_the_line |= start_seq_idx + 1 != end_seq_idx;
+        improper_stop_seq |= start_seq_idx >= end_seq_idx;
 
         if (!first_departure_time.has_value()) {
-            first_departure_time.value() = start_time;
+            first_departure_time = make_optional(start_time);
         }
 
         if (last_arrival_time.has_value()) {
             const auto& last_arrival = last_arrival_time.value();
-            arrival_after_departure |= last_arrival > start_time;
+            improper_stop_seq |= last_arrival > start_time;
             if (last_arrival > start_time && !arrival_before_departure.has_value()) {
-                arrival_before_departure.value() = start_stop;
+                arrival_before_departure = make_optional(start_stop);
             }
         }
 
-        last_arrival_time.value() = end_time;
+        last_arrival_time = make_optional(end_time);
     }
 
-    if (stops_without_the_line || arrival_after_departure) {
+    if (improper_stop_seq) {
         cout << ":-|" << '\n';
     }
     else if (arrival_before_departure.has_value()) {
@@ -296,17 +291,16 @@ void process_ticket_query(const string& line, state_t& state) {
 }
 
 void process_line(const string& line, state_t& state) {
-    // Note that the amnt of spaces is >=1 here
     static const auto line_addition_re = 
-        regex(R"([0-9]+(?:\ +[0-9]+:[0-9][0-9]\ +[a-zA-Z_\^]+)+)");
+        regex(R"([0-9]+(?:\ [0-9]+:[0-9][0-9]\ [a-zA-Z_\^]+)+)");
     static const auto ticket_addition_re =
-        regex(R"(([a-zA-Z\ ]+?)\ +([0-9]*\.[0-9][0-9])\ +([1-9][0-9]*))");
+        regex(R"(([a-zA-Z\ ]+?)\ ([0-9]*\.[0-9][0-9])\ ([1-9][0-9]*))");
     static const auto ticket_query_re =
-        regex(R"(\?\ [a-zA-Z_\^]+(?:\ +[0-9]+\ +[a-zA-Z_\^]+)+)");
+        regex(R"(\?\ [a-zA-Z_\^]+(?:\ [0-9]+\ [a-zA-Z_\^]+)+)");
 
     auto& [tramlines, tickets, _1] = state;
 
-    smatch m;
+    auto m = smatch();
     if (regex_match(line, m, line_addition_re)) {
         process_tramline_addition(line, tramlines);
     }
@@ -324,15 +318,37 @@ void process_line(const string& line, state_t& state) {
 int main() {
     string line;
     state_t state;
-    
+
+    auto in_file = fstream("tests/example.in", ios::in);
+    cin.rdbuf(in_file.rdbuf());
+
+    auto out_stream = stringstream {};
+    auto cout_copy = cout.rdbuf();
+    cout.rdbuf(out_stream.rdbuf());
+
+    auto err_stream = stringstream {};
+    auto cerr_copy = cout.rdbuf();
+    cerr.rdbuf(err_stream.rdbuf());
+
     for (size_t idx = 1; getline(cin, line); ++idx) {
         try {
             process_line(line, state);
         }
         catch (const ticket_office_exn& _) {
-            cerr << idx << ' ' << line << '\n';
+            cerr << "Error in line " << idx << ": " << line << '\n';
         }
     }
+
+    auto& [_1, _2, counter] = state;
+    cout << counter << '\n';
+
+    auto out_file = fstream("tests/example.out", ios::in);
+    assert(equal(istream_iterator<char>(out_file), istream_iterator<char>(), istream_iterator<char>(out_stream)));
+    cout.rdbuf(cout_copy);
+
+    auto err_file = fstream("tests/example.err", ios::in);
+    assert(equal(istream_iterator<char>(err_file), istream_iterator<char>(), istream_iterator<char>(err_stream)));
+    cerr.rdbuf(cerr_copy);
 
     return EXIT_SUCCESS;
 }

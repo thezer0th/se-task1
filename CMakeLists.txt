@@ -9,3 +9,5 @@ endfunction()
 
 simple(kasa)
 simple(sand)
+
+file(COPY tests DESTINATION ${CMAKE_BINARY_DIR})
