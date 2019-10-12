@@ -139,6 +139,7 @@ void process_ticket_addition(const smatch& m, tickets_t& tickets) {
     ticket_id_t id = m[1].str();
 
     string price_str = m[2].str();
+    // following line removes the dot from price, i.e. we store prices in an integral form of 1/100th per unit
     price_str.erase(remove(price_str.begin(), price_str.end(), '.'), price_str.end());
     ticket_price_t price;
     stringstream ss {};
