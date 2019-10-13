@@ -156,7 +156,7 @@ void process_ticket_addition(const smatch& m, tickets_t& tickets) {
     } else {
         if (price_map.find(price) != price_map.end()) {
             auto &cur = price_map.at(price);
-            auto&[cur_dur, _1] = cur;
+            auto& [cur_dur, _1] = cur;
             if (cur_dur < dur) cur = {dur, id};
         } else {
             price_map[price] = {dur, id};
