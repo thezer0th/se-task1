@@ -29,10 +29,10 @@ const static std::string VALID_TICKET_NAME =
         " ABCDEFGHIJKLMNOPQRSTUVWXYZ"
         "abcdefghijklmnopqrstuvwxyz";
 
-std::string randomString(std::string charset, const int len) {
+std::string randomString(std::string charset, const size_t len) {
 	std::string s;
 	s.reserve(len);
-	for (int i = 0; i < len && i < charset.length(); ++i) {
+	for (size_t i = 0; i < len && i < charset.length(); ++i) {
 		s.append(1, charset.at(rand() % charset.length()));
 	}
 
@@ -219,7 +219,7 @@ int main() {
         writeLinesIntoFile(filename, lines);
         //shell_command = "./kasa < "+filename+" >> tests/out"+std::to_string(i);
         //shell_command = "./kasa < "+filename+" &>> tests/err"+std::to_string(i);
-        std::system(shell_command.c_str());
+        // std::system(shell_command.c_str());
     }
 
 	return 0;

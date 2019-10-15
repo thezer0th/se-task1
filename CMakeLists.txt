@@ -10,4 +10,8 @@ endfunction()
 simple(kasa)
 simple(sand)
 
+add_executable("gen" "generator.cpp")
+set_property(TARGET "gen" PROPERTY CXX_STANDARD 17)
+target_compile_options("gen" PRIVATE -Wall -Wextra)
+
 file(COPY tests DESTINATION ${CMAKE_BINARY_DIR})

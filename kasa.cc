@@ -446,9 +446,6 @@ int main() {
     std::string line;
     state_t state;
 
-    auto infile = std::ifstream("tests/example.in");
-    std::cin.rdbuf(infile.rdbuf());
-
     for (size_t idx = 1; std::getline(std::cin, line); ++idx) {
         try {
             process_line(line, state);
