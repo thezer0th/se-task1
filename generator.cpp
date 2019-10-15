@@ -212,14 +212,10 @@ int main() {
     std::srand(std::time(nullptr));
     std::vector<std::string> lines;
     std::string filename;
-    std::string shell_command;
     for(int i = 0; i < TEST_FILES; i++) {
         lines = generateSingleTestLines(TEST_SIZE);
         filename = "tests/in"+std::to_string(i);
         writeLinesIntoFile(filename, lines);
-        //shell_command = "./kasa < "+filename+" >> tests/out"+std::to_string(i);
-        //shell_command = "./kasa < "+filename+" &>> tests/err"+std::to_string(i);
-        // std::system(shell_command.c_str());
     }
 
 	return 0;
