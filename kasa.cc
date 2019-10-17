@@ -89,8 +89,8 @@ stop_time_t stop_time_from_string(const std::string& str) {
     }
 
     // Check whether stop time is correct (i.e. between 5:55 and 21:21)
-    static const auto start = stop_time_t(5, 55), end = stop_time_t(21, 21);
-    if (!(start <= stop_time && stop_time <= end)) {
+    static const auto office_start = stop_time_t(5, 55), office_end = stop_time_t(21, 21);
+    if (!(office_start <= stop_time && stop_time <= office_end)) {
         throw ticket_office_exn("provided stop time is outside of operation range");
     }
 
@@ -294,6 +294,7 @@ std::tuple<std::vector<stop_id_t>, std::vector<tramline_id_t>> extract_query_dat
     return std::make_tuple(stops_seq, lines_seq);
 }
 
+// Verify whether the proposed route is proper structurally.
 bool verify_if_proper_route(const std::vector<stop_id_t>& stops_seq, const std::vector<tramline_id_t>& lines_seq,
         const tramlines_t& tramlines) {
     auto last_arrival_time = std::optional<stop_time_t>();
@@ -334,6 +335,7 @@ bool verify_if_proper_route(const std::vector<stop_id_t>& stops_seq, const std::
     return true;
 }
 
+// Verify whether the specified route entails waiting.
 std::optional<stop_id_t> verify_if_has_to_wait(const std::vector<stop_id_t>& stops_seq,
         const std::vector<tramline_id_t>& lines_seq, const tramlines_t& tramlines) {
     auto last_arrival_time = std::optional<stop_time_t>(std::nullopt);
@@ -392,28 +394,26 @@ void process_route_query(const std::string& line, state_t& state) {
     if (wait_stop_id_opt.has_value()) {
         auto& wait_stop_id = wait_stop_id_opt.value();
         std::cout << ":-( " << wait_stop_id << '\n';
+        return;
     }
-    else {
-        // At this point the sequence itself is fully correct, and we may try to find appropriate ticket set.
-        // Firstly, retrieve the interval of the route, and duration thereof.
-        auto first_departure_time = std::get<_stop_time>(tramlines.at(lines_seq.front()).at(stops_seq.front())),
-             last_arrival_time = std::get<_stop_time>(tramlines.at(lines_seq.back()).at(stops_seq.back()));
-        auto dur = stop_time_diff(first_departure_time, last_arrival_time);
 
-        // Then, find the appropriate ticket set.
-        // The +1 is due to recent spec change to closed-closed time intervals, as opposed to closed-open.
-        auto ticket_set_opt = find_ticket_set(dur + 1, price_map);
-        if (ticket_set_opt.has_value()) {
-            auto& prices_vec = std::get<_prices_vector>(ticket_set_opt.value());
-            print_ticket_set(prices_vec, price_map);
+    // At this point the sequence itself is fully correct, and we may try to find appropriate ticket set.
+    // Firstly, retrieve the interval of the route, and duration thereof.
+    auto first_departure_time = std::get<_stop_time>(tramlines.at(lines_seq.front()).at(stops_seq.front())),
+            last_arrival_time = std::get<_stop_time>(tramlines.at(lines_seq.back()).at(stops_seq.back()));
+    auto dur = stop_time_diff(first_departure_time, last_arrival_time);
 
-            // Also, in accordance with spec, we must record total # of sold tickets.
-            counter += prices_vec.size();
-        }
-        else {
-            // In such a case, of course, no appropriate ticket set has been found.
-            std::cout << ":-|" << '\n';
-        }
+    // Then, find the appropriate ticket set.
+    // The +1 is due to recent spec change to closed-closed time intervals, as opposed to closed-open.
+    auto ticket_set_opt = find_ticket_set(dur + 1, price_map);
+    if (ticket_set_opt.has_value()) {
+        auto& prices_vec = std::get<_prices_vector>(ticket_set_opt.value());
+        print_ticket_set(prices_vec, price_map);
+        // Also, in accordance with spec, we must record total # of sold tickets.
+        counter += prices_vec.size();
+    } else {
+        // In such a case, of course, no appropriate ticket set has been found.
+        std::cout << ":-|" << '\n';
     }
 }
 

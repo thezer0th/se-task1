@@ -30,13 +30,13 @@ const static std::string VALID_TICKET_NAME =
         "abcdefghijklmnopqrstuvwxyz";
 
 std::string randomString(std::string charset, const size_t len) {
-	std::string s;
-	s.reserve(len);
-	for (size_t i = 0; i < len && i < charset.length(); ++i) {
-		s.append(1, charset.at(rand() % charset.length()));
-	}
+    std::string s;
+    s.reserve(len);
+    for (size_t i = 0; i < len && i < charset.length(); ++i) {
+        s.append(1, charset.at(rand() % charset.length()));
+    }
 
-	return s;
+    return s;
 }
 
 hour getHour(bool correct_format) {
@@ -60,23 +60,23 @@ price getPrice(int correct_format) {
 }
 
 std::vector<drive> generateRandomDrives(uint16_t quantity, int max_drive_len, int max_stop_name_len) {
-	std::vector<drive> vec;
-	vec.reserve(quantity);
+    std::vector<drive> vec;
+    vec.reserve(quantity);
 
-	for(int i = 0; i < quantity; i++) {
-		uint16_t number = rand() % UINT_FAST8_MAX;
-		std::vector<std::tuple<hour, std::string>> content;
-		int drive_len = (rand() % (max_drive_len - 1)) + 1;
+    for(int i = 0; i < quantity; i++) {
+        uint16_t number = rand() % UINT_FAST8_MAX;
+        std::vector<std::tuple<hour, std::string>> content;
+        int drive_len = (rand() % (max_drive_len - 1)) + 1;
 
-		for(int j = 0; j < drive_len; j++) {
-			hour h = getHour(CORRECT_FORMAT);
-			int stop_name_len = rand() % max_stop_name_len;
-			content.push_back(std::make_tuple(h, randomString(VALID_STOP_NAME, stop_name_len)));
-		}
-		vec.push_back(std::make_tuple(number, content));
-		content.clear();
-	}
-	return vec;
+        for(int j = 0; j < drive_len; j++) {
+            hour h = getHour(CORRECT_FORMAT);
+            int stop_name_len = rand() % max_stop_name_len;
+            content.push_back(std::make_tuple(h, randomString(VALID_STOP_NAME, stop_name_len)));
+        }
+        vec.push_back(std::make_tuple(number, content));
+        content.clear();
+    }
+    return vec;
 }
 
 std::vector<ticket> generateRandomTickets(int quantity, int max_ticket_name_len) {
@@ -93,11 +93,11 @@ std::vector<ticket> generateRandomTickets(int quantity, int max_ticket_name_len)
 }
 
 std::string hourToString(hour h) {
-	std::string s;
-	s.append(std::to_string(std::get<0>(h)));
-	s.append(":");
-	s.append(std::to_string(std::get<1>(h)));
-	return s;
+    std::string s;
+    s.append(std::to_string(std::get<0>(h)));
+    s.append(":");
+    s.append(std::to_string(std::get<1>(h)));
+    return s;
 }
 
 std::string priceToString(price p) {
@@ -110,18 +110,18 @@ std::string priceToString(price p) {
 }
 
 std::string driveToAddDriveString(drive d) {
-	std::string s;
-	int drive_numb = std::get<0>(d);
-	std::vector<std::tuple<hour, std::string>> content = std::get<1>(d);
+    std::string s;
+    int drive_numb = std::get<0>(d);
+    std::vector<std::tuple<hour, std::string>> content = std::get<1>(d);
 
-	s.append(std::to_string(drive_numb));
-	for(auto elem : content) {
-		s.append(" ");
-		s.append(hourToString(std::get<0>(elem)));
-		s.append(" ");
-		s.append(std::get<1>(elem));
-	}
-	return s;
+    s.append(std::to_string(drive_numb));
+    for(auto elem : content) {
+        s.append(" ");
+        s.append(hourToString(std::get<0>(elem)));
+        s.append(" ");
+        s.append(std::get<1>(elem));
+    }
+    return s;
 }
 
 std::string ticketToNewTicketString(ticket t) {
@@ -218,5 +218,5 @@ int main() {
         writeLinesIntoFile(filename, lines);
     }
 
-	return 0;
+    return 0;
 }
